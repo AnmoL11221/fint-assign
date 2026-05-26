@@ -83,7 +83,7 @@ def reconstruct_transaction_rows(
     from app.utils.text import cell_text
 
     raw: list[RawTransactionRow] = []
-    for row_index, cells in enumerate(table_rows[header_row_index + 1 :], start=0):
+    for local_idx, cells in enumerate(table_rows[header_row_index + 1 :]):
         cleaned = [cell_text(c) for c in cells]
         if not _is_transaction_data_row(cleaned):
             continue
@@ -91,8 +91,11 @@ def reconstruct_transaction_rows(
             RawTransactionRow(
                 cells=cleaned,
                 page_index=page_index,
-                row_index=row_index,
+                # Absolute row index within the full table (0-based from first row),
+                # so indices remain unique and traceable across tables.
+                row_index=header_row_index + 1 + local_idx,
             )
         )
 
     return merge_multiline_narration_rows(raw, mapping)
+

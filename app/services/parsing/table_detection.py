@@ -117,15 +117,17 @@ def detect_transaction_tables(tables: list[ExtractedTable]) -> list[tuple[Extrac
             if not _is_transaction_data_row(row):
                 continue
             # If a mapped amount cell contains a date substring, it's likely a merged text column.
+            # Use a per-row flag so one bad row doesn't wipe out all previously counted valid rows.
+            row_ok = True
             for field in ("debit", "credit", "balance"):
                 idx = getattr(mapping, field)
                 if idx is None or idx >= len(row):
                     continue
                 cell = row[idx] or ""
                 if _DATE_SUBSTRING_RE.search(cell):
-                    data_rows = 0
+                    row_ok = False
                     break
-            else:
+            if row_ok:
                 data_rows += 1
 
         if data_rows >= 1:

@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pdfplumber
-from pypdf import PdfReader
 
 from app.utils.text import cell_text, normalize_whitespace
 from app.utils.amounts import is_amount_like
@@ -123,8 +122,12 @@ class PdfExtractionEngine:
     def extract(self, pdf_path: Path) -> PdfExtractionResult:
         page_texts: list[str] = []
         tables: list[ExtractedTable] = []
+        page_count = 0
 
         with pdfplumber.open(pdf_path) as pdf:
+            # Capture page count here — avoids a redundant second file open with pypdf.
+            page_count = len(pdf.pages)
+
             for page_index, page in enumerate(pdf.pages):
                 # Deduplicate only within a page. The same transaction table
                 # can legitimately appear on later pages with similar shape.
@@ -153,12 +156,11 @@ class PdfExtractionEngine:
                     seen_signatures.add(sig)
                     tables.append(ExtractedTable(page_index=page_index, rows=rows))
 
-        reader = PdfReader(str(pdf_path))
         full_text = "\n".join(page_texts)
 
         return PdfExtractionResult(
             full_text=full_text,
             page_texts=page_texts,
             tables=tables,
-            page_count=len(reader.pages),
+            page_count=page_count,
         )

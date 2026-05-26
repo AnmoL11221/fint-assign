@@ -11,6 +11,13 @@ def parse_amount(value: str | None) -> Decimal | None:
     if not text or text in {"-", "--", "—"}:
         return None
 
+    # Parenthesis-style negative notation: "(1,234.56)" → negative amount.
+    # Must be detected before the Dr/Cr pass so we don't lose the sign.
+    paren_negative = False
+    if text.startswith("(") and text.endswith(")") and len(text) > 2:
+        paren_negative = True
+        text = text[1:-1]  # strip parens; sign applied at the end
+
     # HDFC/Indian statements sometimes encode debit/credit as "Dr"/"Cr"
     # suffix/prefix on a single amount column (e.g. "500.00 Dr").
     sign = Decimal("1")
@@ -23,7 +30,6 @@ def parse_amount(value: str | None) -> Decimal | None:
         m_prefix = re.search(r"^\s*(?:dr|cr)\.?\s*", text, flags=re.IGNORECASE)
         if m_prefix:
             token = m_prefix.group(0).strip().lower().replace(".", "")
-            # token could still include whitespace; normalize
             token = token.split()[0] if token else token
             sign = Decimal("-1") if token == "dr" else Decimal("1")
             text = re.sub(r"^\s*(?:dr|cr)\.?\s*", "", text, flags=re.IGNORECASE)
@@ -35,6 +41,9 @@ def parse_amount(value: str | None) -> Decimal | None:
     text = text.replace(",", "")
     try:
         amount = Decimal(text)
+        # Parenthesis notation takes unconditional negative precedence.
+        if paren_negative:
+            return -abs(amount)
         # Normalize sign: if Dr/Cr token exists, force absolute value with sign.
         return sign * abs(amount)
     except InvalidOperation:

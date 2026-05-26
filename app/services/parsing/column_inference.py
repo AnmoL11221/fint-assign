@@ -113,9 +113,57 @@ def infer_columns_from_data(rows: list[list[str]], sample_size: int = 20) -> Col
     amount_cols = sorted(i for i in range(col_count) if amount_scores[i] > 0)
 
     if len(amount_cols) >= 3:
-        mapping.balance = amount_cols[-1]
-        mapping.debit = amount_cols[-3]
-        mapping.credit = amount_cols[-2]
+        # Initial assumption: [... debit, credit, balance] in left-to-right order.
+        # This matches the majority of Indian bank statement layouts (HDFC, SBI, ICICI).
+        balance_col = amount_cols[-1]
+        debit_col   = amount_cols[-3]
+        credit_col  = amount_cols[-2]
+
+        # Validate assignment with a fill-count heuristic over the sample rows.
+        # In a proper split layout: both debit and credit columns are sparse
+        # (only one is populated per row), and balance is always filled.
+        # If the assumed debit column is consistently MORE filled than the
+        # assumed credit column, the two are likely swapped — swap them back.
+        sample_rows = rows[:sample_size]
+
+        def _fill_count(col: int) -> int:
+            return sum(
+                1 for r in sample_rows
+                if col < len(r) and is_amount_like((r[col] or "").strip())
+            )
+
+        debit_fill   = _fill_count(debit_col)
+        credit_fill  = _fill_count(credit_col)
+        balance_fill = _fill_count(balance_col)
+
+        # Sanity: balance should be the most-filled column of the three.
+        # If it isn't, something is structurally wrong — log and proceed as-is.
+        if balance_fill < max(debit_fill, credit_fill):
+            logger.warning(
+                "Balance column (col %d, fill=%d) is not the most filled "
+                "amount column (debit col %d fill=%d, credit col %d fill=%d). "
+                "Column assignment may be incorrect.",
+                balance_col, balance_fill,
+                debit_col, debit_fill,
+                credit_col, credit_fill,
+            )
+
+        # Swap debit/credit if debit appears denser than credit.
+        # In a correctly-labelled split layout, both should be roughly equal
+        # in sparsity (each row populates only one). A 2× density difference
+        # strongly suggests the labels are reversed.
+        if debit_fill > 0 and credit_fill > 0 and debit_fill > 2 * credit_fill:
+            logger.warning(
+                "Swapping inferred debit (col %d, fill=%d) and credit (col %d, fill=%d) "
+                "columns based on fill-count heuristic.",
+                debit_col, debit_fill, credit_col, credit_fill,
+            )
+            debit_col, credit_col = credit_col, debit_col
+
+        mapping.balance = balance_col
+        mapping.debit   = debit_col
+        mapping.credit  = credit_col
+
     elif len(amount_cols) == 2:
         other_col = amount_cols[0]
         balance_col = amount_cols[1]

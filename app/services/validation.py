@@ -84,8 +84,7 @@ class StatementValidator:
 
         for idx, txn in enumerate(transactions):
             if txn.balance is None:
-                prev_balance = txn.balance
-                continue
+                continue  # preserve prev_balance; don't reset it on missing-balance rows
 
             if prev_balance is not None:
                 expected = prev_balance
