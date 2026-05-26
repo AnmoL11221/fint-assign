@@ -8,6 +8,8 @@ def test_hdfc_metadata(sample_extraction):
     adapter = HdfcAdapter()
     meta = adapter.extract_metadata(sample_extraction)
     assert meta.bank_name == "HDFC Bank"
+    assert meta.account_holder == "JOHN DOE"
+    assert meta.masked_account_number == "XX1234"
 
 
 def test_registry_returns_adapter():

@@ -10,6 +10,11 @@ def test_missing_date_issue():
     issues = validator.validate(txns)
     assert any(i.code == "missing_date" for i in issues)
 
+def test_no_transactions_issue():
+    validator = StatementValidator()
+    issues = validator.validate([])
+    assert any(i.code == "no_transactions" for i in issues)
+
 
 def test_balance_mismatch_issue():
     validator = StatementValidator()

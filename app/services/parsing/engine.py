@@ -3,6 +3,8 @@ import logging
 from app.adapters.registry import get_adapter
 from app.schemas.metadata import StatementMetadata
 from app.schemas.transaction import NormalizedTransaction
+from app.utils.amounts import is_amount_like
+from app.utils.dates import is_date_like
 from app.services.pdf_extraction import PdfExtractionEngine, PdfExtractionResult
 from app.services.parsing.bank_detection import detect_bank
 from app.services.parsing.column_inference import (
@@ -49,8 +51,39 @@ class ParsingEngine:
 
         detected = detect_transaction_tables(cleaned_tables)
         if not detected and cleaned_tables:
-            # After cleaning, header is row 0
-            detected = [(t, 0) for t in cleaned_tables if len(t.rows) >= 2]
+            # Tight fallback: only accept tables whose header maps to a plausible
+            # transaction schema and that actually contain transaction-like rows.
+            tightened: list[tuple] = []
+
+            for t in cleaned_tables:
+                if len(t.rows) < 2:
+                    continue
+                header_cells = t.rows[0]
+                mapping = infer_columns_from_header(header_cells)
+
+                if mapping.date is None or mapping.description is None:
+                    continue
+                if mapping.balance is None and mapping.debit is None and mapping.credit is None:
+                    continue
+
+                # Check for at least one likely transaction-like row under the
+                # current mapping (prefer date-like in the mapped date column).
+                has_txn_row = False
+                for row in t.rows[1 : 10]:
+                    date_ok = (
+                        mapping.date is not None
+                        and mapping.date < len(row)
+                        and is_date_like(row[mapping.date])
+                    )
+                    amount_count = sum(1 for c in row if is_amount_like(c))
+                    if date_ok or amount_count >= 2:
+                        has_txn_row = True
+                        break
+
+                if has_txn_row:
+                    tightened.append((t, 0))
+
+            detected = tightened
 
         for table_index, (table, header_idx) in enumerate(detected):
             log_cleaned_table(table, table_index)

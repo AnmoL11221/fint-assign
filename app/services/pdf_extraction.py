@@ -5,6 +5,8 @@ import pdfplumber
 from pypdf import PdfReader
 
 from app.utils.text import cell_text, normalize_whitespace
+from app.utils.amounts import is_amount_like
+from app.utils.dates import is_date_like
 
 _TABLE_SETTINGS: list[dict | None] = [
     None,
@@ -42,10 +44,37 @@ def _rows_from_table_matrix(table: list[list]) -> list[list[str]]:
     return cleaned_rows
 
 
+def _cell_sig(s: str | None) -> str:
+    if not s:
+        return ""
+    return normalize_whitespace(str(s))[:25]
+
+
+def _row_fingerprint(cells: list[str]) -> tuple:
+    # Use both structural info and content hints so we don't over-dedupe.
+    date_count = sum(1 for c in cells[:3] if is_date_like(c))
+    amount_count = sum(1 for c in cells if is_amount_like(c))
+    first = _cell_sig(cells[0]) if cells else ""
+    last = _cell_sig(cells[-1]) if cells else ""
+    return (len(cells), date_count, amount_count, first, last)
+
+
 def _table_signature(rows: list[list[str]]) -> tuple:
     if not rows:
         return tuple()
-    return (len(rows), len(rows[0]), rows[0][0][:20] if rows[0] else "")
+    max_width = max(len(r) for r in rows)
+    first_row = rows[0]
+    second_row = rows[1] if len(rows) > 1 else []
+    mid_row = rows[len(rows) // 2] if rows else []
+    last_row = rows[-1]
+    return (
+        len(rows),
+        max_width,
+        _row_fingerprint(first_row),
+        _row_fingerprint(second_row),
+        _row_fingerprint(mid_row),
+        _row_fingerprint(last_row),
+    )
 
 
 def _extract_tables_from_words(page) -> list[list[list[str]]]:
@@ -94,10 +123,13 @@ class PdfExtractionEngine:
     def extract(self, pdf_path: Path) -> PdfExtractionResult:
         page_texts: list[str] = []
         tables: list[ExtractedTable] = []
-        seen_signatures: set[tuple] = set()
 
         with pdfplumber.open(pdf_path) as pdf:
             for page_index, page in enumerate(pdf.pages):
+                # Deduplicate only within a page. The same transaction table
+                # can legitimately appear on later pages with similar shape.
+                seen_signatures: set[tuple] = set()
+
                 text = page.extract_text() or ""
                 if not text.strip():
                     text = page.extract_text(layout=True) or ""

@@ -9,11 +9,15 @@ class GenericAdapter(BankAdapter):
     bank_name = "Unknown"
 
     _ACCOUNT_RE = re.compile(
-        r"(?:account\s*(?:no|number|#)?\.?\s*:?\s*)([Xx*\d]{4,}[\dXx*]{4,})",
+        # Masked account numbers like "XX1234" or "XXXX1234"
+        r"(?:account\s*(?:no|number|#)?\.?\s*:?\s*)([Xx*\d]{4,})",
         re.I,
     )
     _HOLDER_RE = re.compile(
-        r"(?:customer\s*name|account\s*holder|name)\s*:?\s*([A-Za-z][A-Za-z\s.]{2,60})",
+        # Capture person name without swallowing "Account No ..."
+        r"(?:customer\s*name|account\s*holder)\s*:?\s*"
+        r"([A-Za-z][A-Za-z\s.]{2,60}?)\s*"
+        r"(?=account\s*no|a/c\s*no|account\b|$)",
         re.I,
     )
     _PERIOD_RE = re.compile(

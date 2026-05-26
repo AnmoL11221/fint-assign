@@ -2,7 +2,7 @@ import logging
 import re
 
 from app.schemas.transaction import ColumnMapping
-from app.utils.amounts import is_amount_like
+from app.utils.amounts import is_amount_like, parse_amount
 from app.utils.dates import is_date_like
 
 logger = logging.getLogger(__name__)
@@ -117,8 +117,53 @@ def infer_columns_from_data(rows: list[list[str]], sample_size: int = 20) -> Col
         mapping.debit = amount_cols[-3]
         mapping.credit = amount_cols[-2]
     elif len(amount_cols) == 2:
-        mapping.debit = amount_cols[0]
-        mapping.balance = amount_cols[1]
+        other_col = amount_cols[0]
+        balance_col = amount_cols[1]
+
+        # Two-amount-column layouts are ambiguous:
+        # - debit + balance (debit column empty on credit rows)
+        # - amount (signed via Dr/Cr) + balance
+        #
+        # Heuristic:
+        # - if signs vary (both positive and negative amounts appear), treat as
+        #   single signed amount column.
+        # - otherwise, if the column is consistently populated, treat as the
+        #   single signed amount column.
+        considered_rows = rows[:sample_size]
+        total_with_col = 0
+        filled_with_amount = 0
+        neg_count = 0
+        pos_count = 0
+
+        for row in considered_rows:
+            if other_col >= len(row):
+                continue
+            total_with_col += 1
+            cell = (row[other_col] or "").strip()
+            if not cell:
+                continue
+            if not is_amount_like(cell):
+                continue
+            filled_with_amount += 1
+            parsed = parse_amount(cell)
+            if parsed is None:
+                continue
+            if parsed < 0:
+                neg_count += 1
+            elif parsed > 0:
+                pos_count += 1
+
+        filled_ratio = (
+            filled_with_amount / total_with_col if total_with_col > 0 else 0
+        )
+
+        if (neg_count > 0 and pos_count > 0) or filled_ratio >= 0.8:
+            mapping.amount = other_col
+        else:
+            # Treat as debit-only column (credit is absent).
+            mapping.debit = other_col
+
+        mapping.balance = balance_col
     elif len(amount_cols) == 1:
         mapping.amount = amount_cols[0]
 

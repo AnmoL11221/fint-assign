@@ -22,7 +22,15 @@ def parse_transaction_row(row: RawTransactionRow, mapping: ColumnMapping) -> Nor
     credit = parse_amount(_safe_cell(cells, mapping.credit))
     balance = parse_amount(_safe_cell(cells, mapping.balance))
 
-    if debit is None and credit is None and mapping.amount is not None:
+    # Only use a single-amount fallback when the statement does NOT have
+    # separate debit/credit columns (otherwise we risk confusing balance as amount).
+    if (
+        mapping.amount is not None
+        and mapping.debit is None
+        and mapping.credit is None
+        and debit is None
+        and credit is None
+    ):
         amount = parse_amount(_safe_cell(cells, mapping.amount))
         if amount is not None:
             if amount < 0:

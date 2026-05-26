@@ -111,7 +111,29 @@ def clean_table(table: ExtractedTable) -> ExtractedTable:
     if not rows:
         return ExtractedTable(page_index=table.page_index, rows=[])
 
-    header, body = merge_multiline_header_rows(rows)
+    def _find_header_start(rows_: list[list[str]]) -> int | None:
+        # HDFC statements often include a title row (e.g. "Account Statement")
+        # before the actual column header. Choose the best header-like row
+        # within the first N rows.
+        best_idx: int | None = None
+        best_score = 0
+        for idx, row in enumerate(rows_[:12]):
+            score = _header_score(row)
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+        # Require a reasonably header-like row.
+        return best_idx if best_score >= 2 else None
+
+    header_start = _find_header_start(rows)
+    if header_start is None:
+        return ExtractedTable(page_index=table.page_index, rows=[])
+
+    # Slice from the detected header start; any title/metadata rows before
+    # this are not part of the transaction table structure.
+    rows_from_header = rows[header_start:]
+
+    header, body = merge_multiline_header_rows(rows_from_header)
     if not header:
         return ExtractedTable(page_index=table.page_index, rows=[])
 

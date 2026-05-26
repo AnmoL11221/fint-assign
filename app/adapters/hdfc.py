@@ -11,11 +11,14 @@ class HdfcAdapter(GenericAdapter):
     bank_name = "HDFC Bank"
 
     _HOLDER_RE = re.compile(
-        r"(?:customer\s*id|customer\s*name)\s*[:\s]+([A-Za-z][A-Za-z\s.]{2,60})",
+        r"(?:customer\s*id|customer\s*name)\s*[:\s]+\s*"
+        r"([A-Za-z][A-Za-z\s.]{2,60}?)\s*"
+        r"(?=account\s*no|a/c\s*no|account\b|$)",
         re.I,
     )
     _ACCOUNT_RE = re.compile(
-        r"(?:account\s*no|a/c\s*no)\s*[:\s]+([Xx*\d]{4,}[\dXx*]{4,})",
+        # Masked account numbers like "XX1234" or "XXXX1234"
+        r"(?:account\s*no|a/c\s*no)\s*[:\s]+([Xx*\d]{4,})",
         re.I,
     )
 

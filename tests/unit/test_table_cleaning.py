@@ -29,3 +29,20 @@ def test_clean_table_removes_empty_rows():
     )
     cleaned = clean_table(table)
     assert len(cleaned.rows) == 2
+
+
+def test_clean_table_skips_title_row_before_header():
+    table = ExtractedTable(
+        page_index=0,
+        rows=[
+            ["Account Statement", "", "", "", "", "", ""],
+            ["Date", "Narration", "", "", "Withdrawal Amt.", "Deposit Amt.", "Closing Balance"],
+            ["", "", "Chq./Ref.No.", "Value Dt", "", "", ""],
+            ["01/04/2024", "UPI/ABC STORE", "", "01/04/2024", "", "1,000.00", "11,000.00"],
+        ],
+    )
+    cleaned = clean_table(table)
+    assert cleaned.rows, "expected cleaned table rows"
+    header = cleaned.rows[0]
+    assert "Date" in header[0]
+    assert "Narration" in header[1]

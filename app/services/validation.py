@@ -8,6 +8,16 @@ from app.utils.dates import parse_date
 class StatementValidator:
     def validate(self, transactions: list[NormalizedTransaction]) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
+        if not transactions:
+            issues.append(
+                ValidationIssue(
+                    code="no_transactions",
+                    message="No transactions were parsed from the statement",
+                    row_index=None,
+                    field=None,
+                )
+            )
+            return issues
         issues.extend(self._validate_rows(transactions))
         issues.extend(self._validate_balance_consistency(transactions))
         return issues

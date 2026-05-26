@@ -27,6 +27,21 @@ def test_infer_columns_from_data():
     assert mapping.balance == 4
 
 
+def test_infer_columns_from_data_signed_amount_layout():
+    # Layout: date, description, amount (Dr/Cr encoded), balance (running)
+    rows = [
+        ["01/04/2024", "Test debit", "500.00 Dr", "100.00"],
+        ["02/04/2024", "Test credit", "200.00 Cr", "300.00"],
+    ]
+    mapping = infer_columns_from_data(rows, sample_size=2)
+    assert mapping.date == 0
+    assert mapping.description == 1
+    assert mapping.amount == 2
+    assert mapping.balance == 3
+    assert mapping.debit is None
+    assert mapping.credit is None
+
+
 def test_merge_column_mappings_prefers_header():
     header = ColumnMapping(date=0, description=1, debit=2, credit=3, balance=4)
     data = ColumnMapping(date=1, description=0)

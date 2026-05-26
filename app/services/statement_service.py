@@ -39,7 +39,19 @@ class StatementService:
             raise ParseError(f"Failed to parse statement: {exc}") from exc
 
         issues = self._validator.validate(transactions)
-        blocking_codes = {"invalid_date", "malformed_row", "balance_mismatch"}
+        blocking_codes = {
+            # Empty/failed extraction is not a valid parse
+            "no_transactions",
+            # Required fields
+            "missing_date",
+            "missing_description",
+            "missing_amount",
+            # Malformed/invalid rows
+            "invalid_date",
+            "malformed_row",
+            # Financial integrity
+            "balance_mismatch",
+        }
 
         return ParseResult(
             statement_id=statement_id,
